@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quran & Dua Guide</title>
+  <!-- Amiri: a classic Arabic font for the duas (normal Arabic text) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri&display=swap">
+  <style>
+    /* The King Fahd Complex Quran font. Our Arabic text was prepared for it,
+       so every mark displays correctly. */
+    @font-face { font-family: "Uthmanic Hafs"; src: url("/static/fonts/UthmanicHafs.otf"); }
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 16px; background: #f7f5ef; color: #222; }
+    h1 { color: #1f5f4a; margin-bottom: 4px; }
+    h2 { color: #1f5f4a; font-size: 18px; margin-top: 24px; }
+    form { display: flex; gap: 8px; margin: 16px 0; }
+    input { flex: 1; min-width: 0; padding: 10px; font-size: 16px; border: 1px solid #bbb; border-radius: 6px; }
+    button { padding: 10px 18px; font-size: 16px; background: #1f5f4a; color: white; border: 0; border-radius: 6px; cursor: pointer; }
+    .tabs { display: flex; gap: 8px; margin-top: 12px; }
+    .tabs button { background: #dfe9e4; color: #1f5f4a; }
+    .tabs button.active { background: #1f5f4a; color: white; }
+    select { width: 100%; padding: 10px; font-size: 16px; margin: 16px 0; }
+    .card { background: white; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+    .arabic { font-family: "Uthmanic Hafs", serif; direction: rtl; text-align: right; font-size: 26px; line-height: 1.9; margin-bottom: 8px; white-space: pre-line; }
+    .dua-arabic { font-family: "Amiri", serif; }
+    .transliteration { font-style: italic; color: #555; margin-bottom: 8px; white-space: pre-line; }
+    .topic { font-size: 13px; color: #8a6d1f; text-transform: uppercase; letter-spacing: .03em; margin-bottom: 8px; }
+    .citation { font-weight: bold; color: #1f5f4a; margin-top: 8px; }
+    .source { font-size: 14px; color: #555; }
+    .note { font-size: 13px; color: #666; }
+    .hidden { display: none; }
+    .question { background: #1f5f4a; color: white; border-radius: 12px; padding: 10px 14px; margin: 24px 0 8px auto; max-width: 80%; width: fit-content; }
+    .answer { background: white; border-left: 4px solid #1f5f4a; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; line-height: 1.6; }
+    .label { display: inline-block; background: #1f5f4a; color: white; border-radius: 4px; padding: 0 6px; font-size: 13px; margin-right: 6px; }
+    .error { color: #a33; }
+  </style>
+</head>
+<body>
+  <h1>Quran & Dua Guide</h1>
+  <p class="note">Answers come only from the Quran and Hisn al-Muslim. Every citation shows the exact text and where it comes from.</p>
+
+  <div class="tabs">
+    <button id="tab-ask" class="active">Ask a question</button>
+    <button id="tab-search">Search</button>
+    <button id="tab-browse">Browse duas by topic</button>
+  </div>
+
+  <div id="ask-panel">
+    <form id="ask-form">
+      <input id="question" placeholder="e.g. What dua can I say when I feel anxious?" autofocus>
+      <button>Ask</button>
+    </form>
+  </div>
+
+  <div id="search-panel" class="hidden">
+    <form id="search-form">
+      <input id="query" placeholder="e.g. patience, grief, debt, travel">
+      <button>Search</button>
+    </form>
+  </div>
+
+  <div id="browse-panel" class="hidden">
+    <select id="topic-list"><option value="">Choose a topic…</option></select>
+  </div>
+
+  <div id="results"></div>
+
+  <p class="note">
+    Quran translation: Saheeh International (data from quran-json, CC BY-SA 4.0).
+    Duas: Hisn al-Muslim (Fortress of the Muslim) by Sa'id bin Wahf Al-Qahtani.<br>
+    Answers are written by AI from the passages shown, and can still be imperfect.
+    This is not a source of religious rulings. Please consult a qualified scholar.
+  </p>
+
+  <script>
+    const resultsBox = document.getElementById("results");
+
+    // Small helper: make an element with a class and plain text.
+    // (textContent, not innerHTML, so text is always shown safely.)
+    function el(tag, className, text) {
+      const e = document.createElement(tag);
+      if (className) e.className = className;
+      if (text) e.textContent = text;
+      return e;
+    }
+
+    function verseCard(verse) {
+      const card = el("div", "card");
+      const arabic = el("div", "arabic", verse.arabic);
+      arabic.lang = "ar";
+      card.append(arabic, el("div", "", verse.translation), el("div", "citation", verse.citation));
+      return card;
+    }
+
+    function duaCard(dua) {
+      const card = el("div", "card");
+      const arabic = el("div", "arabic dua-arabic", dua.arabic);
+      arabic.lang = "ar";
+      card.append(
+        el("div", "topic", dua.topic),
+        arabic,
+        el("div", "transliteration", dua.transliteration),
+        el("div", "", dua.translation),
+        el("div", "citation", dua.citation),
+        el("div", "source", "Reference & notes: " + dua.source),
+      );
+      return card;
+    }
+
+    // ---- Ask tab ----
+    // Show the AI's answer. "[Q1]"-style labels are matched to the cards below it.
+    function showAnswer(data) {
+      resultsBox.append(el("div", "answer", data.answer));
+      for (const c of data.citations) {
+        const card = c.kind === "quran" ? verseCard(c) : duaCard(c);
+        card.prepend(el("span", "label", c.label));
+        resultsBox.append(card);
+      }
+    }
+
+    document.getElementById("ask-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = document.getElementById("question");
+      const question = input.value.trim();
+      if (!question) return;
+      input.value = "";
+
+      resultsBox.append(el("div", "question", question));
+      const waiting = el("div", "note", "Searching the Quran and duas…");
+      resultsBox.append(waiting);
+      waiting.scrollIntoView({ behavior: "smooth" });
+
+      try {
+        const response = await fetch("/api/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+        });
+        const data = await response.json();
+        waiting.remove();
+        if (!response.ok) {
+          resultsBox.append(el("div", "answer error", data.detail || "Something went wrong."));
+          return;
+        }
+        showAnswer(data);
+      } catch (err) {
+        waiting.remove();
+        resultsBox.append(el("div", "answer error", "Could not reach the server."));
+      }
+    });
+
+    // ---- Search tab ----
+    document.getElementById("search-form").addEventListener("submit", async (event) => {
+      event.preventDefault();  // stop the page from reloading
+      const q = document.getElementById("query").value.trim();
+      if (!q) return;
+
+      resultsBox.textContent = "Searching...";
+      const response = await fetch("/api/search?q=" + encodeURIComponent(q));
+      const data = await response.json();
+
+      resultsBox.innerHTML = "";
+      if (data.duas.length === 0 && data.quran.length === 0) {
+        resultsBox.textContent = "Nothing found. Try a different word.";
+        return;
+      }
+      if (data.duas.length > 0) {
+        resultsBox.append(el("h2", "", "Duas"));
+        data.duas.forEach((d) => resultsBox.append(duaCard(d)));
+      }
+      if (data.quran.length > 0) {
+        resultsBox.append(el("h2", "", "Quran"));
+        data.quran.forEach((v) => resultsBox.append(verseCard(v)));
+      }
+    });
+
+    // ---- Browse tab ----
+    const topicList = document.getElementById("topic-list");
+
+    async function loadTopics() {
+      const topics = await (await fetch("/api/topics")).json();
+      for (const topic of topics) topicList.append(new Option(topic, topic));
+    }
+
+    topicList.addEventListener("change", async () => {
+      resultsBox.innerHTML = "";
+      if (!topicList.value) return;
+      const duas = await (await fetch("/api/duas?topic=" + encodeURIComponent(topicList.value))).json();
+      duas.forEach((d) => resultsBox.append(duaCard(d)));
+    });
+
+    // ---- Switching tabs ----
+    function showTab(name) {
+      document.getElementById("tab-ask").classList.toggle("active", name === "ask");
+      document.getElementById("ask-panel").classList.toggle("hidden", name !== "ask");
+      document.getElementById("tab-search").classList.toggle("active", name === "search");
+      document.getElementById("tab-browse").classList.toggle("active", name === "browse");
+      document.getElementById("search-panel").classList.toggle("hidden", name !== "search");
+      document.getElementById("browse-panel").classList.toggle("hidden", name !== "browse");
+      resultsBox.innerHTML = "";
+    }
+    document.getElementById("tab-ask").addEventListener("click", () => showTab("ask"));
+    document.getElementById("tab-search").addEventListener("click", () => showTab("search"));
+    document.getElementById("tab-browse").addEventListener("click", () => showTab("browse"));
+
+    loadTopics();
+  </script>
+</body>
+</html>

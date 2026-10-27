@@ -1,0 +1,9 @@
+# Built by build_database.py, so it doesn't need to be uploaded
+quran.db
+
+# Python cache files
+__pycache__/
+
+# Secrets: never upload API keys
+.env
+*.key
